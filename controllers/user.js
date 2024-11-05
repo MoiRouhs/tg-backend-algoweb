@@ -181,6 +181,13 @@ export const updateUser = async (req, res) => {
           });
         }
         delete userToUpdate.email;
+        if( userToUpdate.access ){
+          return res.status(400).send({
+            status: "error",
+            message: "No puedes modificar los accesos."
+          });
+
+        }
         if(userToUpdate.role){
           return res.status(400).send({
             status: "error",
@@ -236,12 +243,6 @@ export const updateUser = async (req, res) => {
       delete userToUpdate.password;
     }
 
-
-
-    console.log('userIdentity', userIdentity)
-    console.log('userToUpdateInfo', userToUpdateInfo)
-    console.log('datos a actualizar', userToUpdate)
-
     // Buscar y Actualizar el usuario a modificar en la BD
     let userUpdated = await User.findByIdAndUpdate(userToUpdateInfo.id, userToUpdate, { new: true});
 
@@ -264,6 +265,144 @@ export const updateUser = async (req, res) => {
     return res.status(500).send({
       status: "error",
       message: "Error al actualizar los datos del usuario"
+    });
+  }
+}
+
+// Método para mostrar el perfil del usuario
+export const profile = async (req, res) => {
+  try {
+    // Obtener el ID del usuario desde el body
+    let userIdentity = req.user;
+    let userToUpdate = req.body;
+    let userProfile ;
+
+    switch( userIdentity.role){
+      case 'empleado':
+        //console.log('es empleado')
+        if(userIdentity.userId !== userToUpdate.id){
+           return res.status(400).send({
+            status: "error",
+            message: "Solo puedes consultar tus propios datos"
+          });       
+        }
+        userProfile = await User.findById(userToUpdate.id).select('-created_at -__v');
+        break;
+      case 'administrador':
+        //console.log('es administrador')
+        userProfile = await User.findOne({
+          _id: userToUpdate.id,
+          role: { $ne: 'super-admin' } 
+        }).select('-created_at -__v');        
+        if(userProfile === null){
+          return res.status(400).send({
+            status: "error",
+            message: "No puede consultar este perfil"
+          });
+        }
+        break;
+      case 'super-admin':
+        userProfile = await User.findById(userToUpdate.id).select('-created_at -__v');
+        if (!userProfile) {
+          return res.status(404).send({
+            status: "error",
+            message: "Usuario no encontrado"
+          });
+        }
+        break;
+      default:
+        console.log('No tiene rol asignado')
+        return res.status(400).send({
+          status: "error",
+          message: "No puede modificar ningún usuario"
+        });
+    }
+
+    // Devolver la información del perfil del usuario
+    return res.status(200).json({
+      status: "success",
+      user: userProfile
+    });
+
+  } catch (error) {
+    console.log("Error al botener el perfil del usuario:", error);
+    return res.status(500).send({
+      status: "error",
+      message: "Error al obtener el perfil del usuario"
+    });
+  }
+}
+
+// Método para listar usuarios con paginación
+export const listUsers = async (req, res) => {
+  try {
+    let userIdentity = req.user;
+    let users ;
+    // Controlar en qué página estamos y el número de ítemas por página
+    let page = req.params.page ? parseInt(req.params.page, 10) : 1;
+    let itemsPerPage = req.query.limit ? parseInt(req.query.limit, 10) : 5;
+
+    // Realizar la consulta paginada
+    const options = {
+      page: page,
+      limit: itemsPerPage,
+      select: '-password -role -__v -email'
+    };
+
+    switch( userIdentity.role){
+      case 'empleado':
+        console.log('es empleado')
+         return res.status(400).send({
+          status: "error",
+          message: "No puedes consultar ninguna lista de usuarios"
+        });       
+        break;
+      case 'administrador':
+        console.log('es administrador')
+        users = await User.paginate(
+          { role: { $ne: 'super-admin' } }, 
+          options
+        );
+        break;
+      case 'super-admin':
+        console.log('es super administrador')
+        users = await User.paginate( {}, options);
+        break;
+      default:
+        console.log('No tiene rol asignado')
+        return res.status(400).send({
+          status: "error",
+          message: "No puede modificar ningún usuario"
+        });
+    }
+
+    // Si no hay usuario en la página solicitada
+    if (!users || users.docs.length === 0) {
+      return res.status(404).send({
+        status: "error",
+        message: "No hay usuarios disponibles"
+      });
+    }
+
+     // Devolver los usuarios paginados
+    return res.status(200).json({
+      status: "success",
+      users: users.docs,
+      totalDocs: users.totalDocs,
+      totalPages: users.totalPages,
+      page: users.page,
+      pagingCounter: users.pagingCounter,
+      hasPrevPage: users.hasPrevPage,
+      hasNextPage: users.hasNextPage,
+      prevPage: users.prevPage,
+      nextPage: users.nextPage,
+    });
+
+  } catch (error) {
+    console.log("Error al listar los usuarios:", error);
+    return res.status(500).send({
+      status: "error",
+      message: "Error al listar los usuarios"
     });
   }
 }
