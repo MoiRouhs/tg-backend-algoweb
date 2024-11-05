@@ -6,7 +6,7 @@ const AccessSchema = Schema ({
     type: String,
     required: true
   },
-  name_prject: {
+  name_project: {
     type: String,
     required: true
   },
@@ -32,4 +32,4 @@ const AccessSchema = Schema ({
 AccessSchema.plugin(mongoosePaginate);
 
 
-export default model("Access", UserSchema, "access");
+export default model("Access", AccessSchema, "access");
